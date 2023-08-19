@@ -1,70 +1,74 @@
-#include <iostream>
+#include<iostream>
+#include<vector>
+#include<ctime>
+#include<string>
+#include<map>
 
 using namespace std;
-// 交换的函数模板
-template <typename T>
-void mySwap(T &a, T &b)
-{
-    T temp = a;
-    a = b;
-    b = temp;
+
+//公司今天招聘了10个员工（ABCDEFGHIJ），10名员工进入公司之后，需要指派员工在那个部门工作
+//员工信息有: 姓名 工资组成；部门分为：策划、美术、研发
+//随机给10名员工分配部门和工资
+//通过multimap进行信息的插入 key(部门编号) value(员工)
+//分部门显示员工信息
+
+class worker{
+	
+	public:
+		string m_name;
+		int m_salary;
+};
+
+void createworker(vector<worker>&v){
+	
+	string nameSeed="ABCDEFGHIJ";
+	for(int i =0;i<10;i++){
+		
+		worker worker1;
+		worker1.m_name="员工";
+        worker1.m_name+=nameSeed[i];
+
+        worker1.m_salary=rand()%10000 +10000;
+        v.push_back(worker1);
+	}
 }
 
-template <class T> // 也可以替换成typename
-// 利用选择排序，进行对数组从大到小的排序
-void mySort(T arr[], int len)
-{
-    for (int i = 0; i < len; i++)
-    {
-        int max = i; // 最大数的下标
-        for (int j = i + 1; j < len; j++)
-        {
-            if (arr[max] < arr[j])
-            {
-                max = j;
-            }
-        }
-        if (max != i) // 如果最大数的下标不是i，交换两者
-        {
-            mySwap(arr[max], arr[i]);
-        }
+//员工分组
+void setGroup(vector<worker>&v,multimap<int,worker>&m){
+    for(vector<worker>::iterator it = v.begin();it!=v.end();it++){
+        //产生随机部门编号
+        int deptID=rand()%3;
+        m.insert(make_pair(deptID,*it));
+    }
+
+}
+void showWorkerByGroup(multimap<int,worker>&m){
+    cout<<"策划部门："<<endl;
+    multimap<int,worker>::iterator pos = m.find(0);
+    int s = m.count(0);//统计策划部门具体人数
+    int index = 0;
+    for(;pos!=m.end() && index<s;pos++,index++){
+        cout<<"姓名："<<pos->second.m_name<<" 工资："<<pos->second.m_salary<<endl;
     }
 }
-template <typename T>
-void printArray(T arr[], int len)
-{
 
-    for (int i = 0; i < len; i++)
-    {
-        cout << arr[i] << " ";
-    }
-    cout << endl;
-}
-void test01()
-{
-    // 测试char数组
-    char charArr[] = "bdcfeagh";
-    int num = sizeof(charArr) / sizeof(char);
-    mySort(charArr, num);
-    printArray(charArr, num);
-}
 
-void test02()
-{
-    // 测试int数组
-    int intArr[] = {7, 5, 8, 1, 3, 9, 2, 4, 6};
-    int num = sizeof(intArr) / sizeof(int);
-    mySort(intArr, num);
-    printArray(intArr, num);
-}
+int main(){
+	//创建员工
+	vector<worker> vworker;
+	createworker(vworker);
+	
+    // //测试
+    // for(vector<worker>::iterator it=vworker.begin();it!=vworker.end();it++){
+    //     cout<<"姓名："<<it->m_name<<" 工资："<<it->m_salary<<endl;
+    // }
 
-int main()
-{
+    //员工分组
+    multimap<int,worker> mworker;
+    setGroup(vworker,mworker);
 
-    test01();
-    test02();
-
-    system("pause");
-
-    return 0;
+    //显示员工分组
+    showWorkerByGroup(mworker);
+	
+	return 0;
 }

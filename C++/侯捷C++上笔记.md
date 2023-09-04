@@ -42,7 +42,7 @@
 头文件complex.h的结构如下，分为四部分
 1. 防卫式声明，防止头文件被重复包含
 
-```
+```C
 #ifndef _COMPLEX_
 #define _COMPLEX_
 
@@ -51,7 +51,7 @@
 ```
 2. 前置声明：声明头文件用到的类和函数
 
-```
+```C
 #include<cmath>
 
 class ostream;
@@ -61,7 +61,7 @@ complex & _doapl(complex *this, const complex& r);
 ```
 3. 声明类：声明类的函数和变量，简单的函数可以在此实现
 
-```
+```C
 class complex{
 ……
 };
@@ -69,7 +69,7 @@ class complex{
 
 4. 类定义：实现之前声明的各种函数
 
-```
+```C
 complex::function……
 ```
 
@@ -106,6 +106,7 @@ class complex{
 单例模式改进：
 ![](images/2023-07-25-23-24-30.png)
 将static A a;放在函数里————好处：当没人调用时，这个类就不存在
+
 #### const-->常成员函数
 类内函数，如果只读取不写入，要加const
 ![](images/2023-05-16-22-12-17.png)
@@ -287,7 +288,7 @@ String s4 = s1;     // 拷贝3: 调用拷贝构造函数
 ```
 
 
-  
+
 **拷贝构造函数**的实现较为简单,直接调用友元对象的数据指针进行拷贝即可.（两行蓝色部分相同）
 ![](images/2023-06-07-11-11-20.png)
 

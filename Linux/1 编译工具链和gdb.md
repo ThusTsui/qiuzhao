@@ -97,4 +97,77 @@ func调用，因为可能在不同文件里，这样就不知道内存位置。�
 ### gcc其他指令
 
 - -D 等价于#define
-- gcc -c test.c -D DEBUG //相当于#define DEBUG
+  - gcc -c test.c -D DEBUG //相当于#define DEBUG
+
+- -I 增加头文件搜索路径
+   - gcc src/test.c -I include/
+- -O 编译优化：编译器修改指令顺序和内存位置等； 可能对调试产生影响； 可能有bug
+数字越大--优化的越深 c和汇编的对应就乱了
+   - -O0 不优化
+   - -O1 产品
+   - -O2 开源软件
+   - -O3 
+
+编译警告：不允许出现警告
+-Wall
+
+## gdb
+GNU Debugger
+
+要求：编译时加上如下两个命令
+- 不开优化 -O0
+- 补充调试信息(保存变量名信息) -g
+
+### 进入gdb调试
+
+- gdb+可执行程序名
+   - gdb test
+
+### gdb的命令
+
+- list/l    [文件名：][行号] | [函数名]     看文件内容 
+- run/r           运行程序
+- break/b   [文件名：][行号] | [函数名]      打断点   打完断点后再r就会运行到断点处停
+- c/continue   继续运行
+- step/s    vs里的F11
+- next/n    vs里的F10
+- finish    跳出本次函数调用
+- info break / i b      
+- delete    [num]    删除编号为num的断点(不加参数删除所有断点，记得再输一个y)
+- ignore    [num] [count] 无视num断点count次
+
+### 在gdb中查看监视
+
+1. print/p  [表达式]    //不适合持续的观察
+2. display  [表达式]    //持续监视
+   1. 删除：先info display查看编号； 再undisplay删除
+
+### 在gdb中查看内存：x
+
+MIT： 数字(看几个单位)+字母(格式)+字母(每单位多大)
+![](images/2023-09-07-18-38-40.png)
+例：
+![](images/2023-09-07-18-43-18.png)
+
+### 检查崩溃的程序
+
+出现错误：
+![](images/2023-09-07-22-00-15.png)
+调整core(ulimit只能影响一个终端):
+   修改第一行为：core file size          (blocks, -c) unlimited
+   指令如下：
+![](images/2023-09-07-22-07-46.png)
+
+若为生成，需要调整：
+![](images/2023-09-07-22-09-11.png)
+
+查看错误原因：
+![](images/2023-09-07-22-10-20.png)
+
+- 栈溢出导致的崩溃
+
+![](images/2023-09-07-22-17-52.png)
+
+### gdb加命令行参数
+
+![](images/2023-09-07-22-18-19.png)

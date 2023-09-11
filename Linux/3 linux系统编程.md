@@ -63,6 +63,36 @@ sorket文件(网络通信)
 
 ### 追加模式
 "a" ：即append 只写追加————默认从文件结尾写入
-"a+"           读写追加
+"a+"           读写追加————打开时处于文件的开始,写入时(不管此时ptr处于什么位置)跳到文件的末尾
 
-日志系统
+日志系统使用
+
+文件流
+![](images/2023-09-11-20-52-35.png)
+
+### 验证过程：
+
+```C++
+#include <43func.h>
+int main(int argc, char *argv[])
+{
+    // 运行时执行./fopen file1
+    ARGS_CHECK(argc, 2);//参数个数检查
+    //FILE *fp=fopen(argv[1],"r");
+
+    // FILE *fp=fopen(argv[1],"a");//追加模式
+    // ERROR_CHECK(fp,NULL,"fopen");//fopen使用时不成功（没有该文件）检查
+    // fwrite("howareyou",1,9,fp);//写入
+
+    FILE *fp=fopen(argv[1],"a+");//
+    ERROR_CHECK(fp,NULL,"fopen");//fopen使用时不成功（没有该文件）检查
+    char buf[10]={0};
+    fread(buf,1,9,fp);//a+可读
+    puts(buf);
+    printf("before fseek, loc = %ld\n",ftell(fp));
+    fseek(fp,0,SEEK_SET);
+    printf("after fseek, loc = %ld\n",ftell(fp));
+    fwrite("howareyou",1,9,fp);//写入
+    fclose(fp);
+}
+```

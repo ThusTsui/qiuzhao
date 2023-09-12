@@ -96,3 +96,17 @@ int main(int argc, char *argv[])
     fclose(fp);
 }
 ```
+
+## 改变文件属性
+
+1. 用函数实现改变文件权限chmod    //man 2 chmod
+2. 获取当前目录getcwd
+man手册：
+       #include <unistd.h>
+
+       char *getcwd(char *buf, size_t size);
+/*
+1、 buf不为空，返回buf
+*/
+
+设计：

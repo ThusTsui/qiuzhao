@@ -144,7 +144,7 @@ int main(){
     printf("ret = %p,ret = %s\n",ret,ret);
     printf("ret = %p,ret = %s\n",buf,buf);
 }
-//2、buf微孔，返回一个堆空间的地址
+//2、buf为空，返回一个堆空间的地址
 #include<43func.h>
 int main(){
     printf("cwd = %s\n",getcwd(NULL,0));
@@ -159,7 +159,7 @@ int main(){
     int chdir(const char *path);
 
 ![](images/2023-09-13-17-23-47.png)
-改成功了，但是只影响了子进程
+改成功了，但是**只影响了子进程**
 
 #### 4. rmdir mkdir
 
@@ -187,7 +187,8 @@ int main(int argc,char *argv[]){
 ```
 
 2. rmdir
-只能删除空目录
+
+**只能删除空目录**
 ```C
 #include<43func.h>
 int main(int argc,char *argv[]){
@@ -214,14 +215,92 @@ int main(int argc,char *argv[]){
 ![](images/2023-09-13-20-30-27.png)
 
 - 目录流：是目录文件在内存中的缓冲区
+
 每次除了取ptr所指地址，还会指针后移
 ![](images/2023-09-13-20-32-47.png)
 
 ### 目录流相关三个接口
 ![](images/2023-09-13-20-34-12.png)
 
-### 1、opendir
+### readdir
 
+![](images/2023-09-16-12-05-23.png)
 
+### 自己实现ls
 
-### 2、readdir
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    // ./myLs dir
+    ARGS_CHECK(argc,2);
+    DIR *dirp = opendir(argv[1]);//打开父目录，返回目录流指针
+    ERROR_CHECK(dirp,NULL,"opendir");
+    struct dirent * pdirent;//创建目录项指针
+    //当目录项指针不为空，遍历目录，输出目录项各个内容
+    while((pdirent = readdir(dirp)) != NULL){        
+      printf("inode = %ld, reclen = %d, type = %d, name = %s\n",
+              pdirent->d_ino,pdirent->d_reclen, pdirent->d_type, pdirent->d_name);
+    }
+    closedir(dirp);//关闭文件
+}
+```
+
+### 想要指针回退
+> telldir: return current location in directory stream
+> seekdir:set the position of the next readdir() call in the directory stream.
+![](images/2023-09-16-12-23-15.png)
+
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    // ./myLs dir
+    ARGS_CHECK(argc,2);
+    DIR *dirp = opendir(argv[1]);
+    ERROR_CHECK(dirp,NULL,"opendir");
+    struct dirent * pdirent;
+    long loc;
+    while((pdirent = readdir(dirp)) != NULL){
+        if(strcmp(pdirent->d_name,"file2") == 0){
+            loc = telldir(dirp);//记录当前文件流ptr
+        }
+        printf("inode = %ld, reclen = %d, type = %d, name = %s\n",
+            pdirent->d_ino,pdirent->d_reclen, pdirent->d_type, pdirent->d_name);
+    }
+    puts("----------------------------------------------------");
+    seekdir(dirp,loc);//指针回退到记录位置的后一位，原因是tell的时候ptr会后移一位
+    pdirent = readdir(dirp);
+    printf("inode = %ld, reclen = %d, type = %d, name = %s\n",
+        pdirent->d_ino,pdirent->d_reclen, pdirent->d_type, pdirent->d_name);
+    closedir(dirp);
+}
+```
+
+### rewinddir 解决只能回退到指针后一位的问题
+![](images/2023-09-16-12-36-12.png)
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    // ./myLs dir
+    ARGS_CHECK(argc,2);
+    DIR *dirp = opendir(argv[1]);
+    ERROR_CHECK(dirp,NULL,"opendir");
+    struct dirent * pdirent;
+    while((pdirent = readdir(dirp)) != NULL){
+        printf("inode = %ld, reclen = %d, type = %d, name = %s\n",
+            pdirent->d_ino,pdirent->d_reclen, pdirent->d_type, pdirent->d_name);
+    }
+    puts("----------------------------------------------------");
+    rewinddir(dirp);
+    pdirent = readdir(dirp);
+    printf("inode = %ld, reclen = %d, type = %d, name = %s\n",
+        pdirent->d_ino,pdirent->d_reclen, pdirent->d_type, pdirent->d_name);
+    closedir(dirp);
+}
+```
+### stat
+1. 作为命令   stat 文件名 ————显示文件信息
+2. stat函数————显示文件信息，具体实现：
+![](images/2023-09-16-12-40-13.png)
+
+- stat配合目录流实现la -al
+

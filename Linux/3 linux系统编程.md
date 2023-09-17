@@ -10,11 +10,11 @@
 
 
 ## 怎样学习系统编程
-man 手册
+### man 手册
 ![](images/2023-09-10-10-34-11.png)
 - 安装库函数手册
 sudo apt install manpages-posix-dev 
-
+### 步骤
 - man手册内容
   - 名字-声明-细节-返回值
 - 阅读顺序
@@ -47,7 +47,7 @@ sorket文件(网络通信)
 
 ![](images/2023-09-10-20-36-47.png)
 
-## 通过man学习相关接口
+## 通过man学习文件相关接口
 ### fopen
 
 库函数
@@ -67,7 +67,7 @@ sorket文件(网络通信)
 "a" ：即append 只写追加————默认从文件结尾写入
 "a+"           读写追加————打开时处于文件的开始,写入时(不管此时ptr处于什么位置)跳到文件的末尾
 
-日志系统使用
+应用：日志系统使用
 
 文件流
 ![](images/2023-09-11-20-52-35.png)
@@ -201,7 +201,7 @@ int main(int argc,char *argv[]){
 
 
 
-## 目录流
+## 目录流基础
 - 流
 自动后移：用户可以不了解接口的情况下访问所有数据
 
@@ -297,10 +297,285 @@ int main(int argc, char *argv[]){
     closedir(dirp);
 }
 ```
-### stat
+
+## 目录流应用
+### stat实现ll
 1. 作为命令   stat 文件名 ————显示文件信息
 2. stat函数————显示文件信息，具体实现：
 ![](images/2023-09-16-12-40-13.png)
 
 - stat配合目录流实现la -al
 
+**牢记：文件名和路径不完全是对等的，只有在当前目录下的文件才对等**
+**牢记：文件名和路径不完全是对等的，只有在当前目录下的文件才对等**
+**牢记：文件名和路径不完全是对等的，只有在当前目录下的文件才对等**
+![](images/2023-09-17-11-10-01.png)
+
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    // ./myLs dir
+    ARGS_CHECK(argc,2);
+    DIR *dirp = opendir(argv[1]);
+    ERROR_CHECK(dirp,NULL,"opendir");
+    struct dirent * pdirent;
+    struct stat statbuf;
+    int ret = chdir(argv[1]);
+    ERROR_CHECK(ret,-1,"chdir");
+    while((pdirent = readdir(dirp)) != NULL){
+        ret = stat(pdirent->d_name,&statbuf);//文件名只有在当前目录下才是路径
+        ERROR_CHECK(ret,-1,"stat");
+        printf("%8o %ld %d %d %ld %ld %s\n", 
+            statbuf.st_mode,
+            statbuf.st_nlink,
+            statbuf.st_uid,
+            statbuf.st_gid,
+            statbuf.st_size,
+            statbuf.st_mtime,
+            pdirent->d_name);
+    }
+    closedir(dirp);
+}
+```
+输出：
+![](images/2023-09-17-11-27-02.png)
+
+优化：
+
+![](images/2023-09-17-11-42-16.png)
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    // ./myLs dir
+    ARGS_CHECK(argc,2);
+    DIR *dirp = opendir(argv[1]);
+    ERROR_CHECK(dirp,NULL,"opendir");
+    struct dirent * pdirent;
+    struct stat statbuf;
+    int ret = chdir(argv[1]);
+    ERROR_CHECK(ret,-1,"chdir");
+    while((pdirent = readdir(dirp)) != NULL){
+        ret = stat(pdirent->d_name,&statbuf);//文件名只有在当前目录下才是路径
+        ERROR_CHECK(ret,-1,"stat");
+        printf("%6o %ld %s %s %8ld %s %s\n", 
+            statbuf.st_mode,
+            statbuf.st_nlink,
+            getpwuid(statbuf.st_uid)->pw_name,
+            getgrgid(statbuf.st_gid)->gr_name,
+            statbuf.st_size,
+            ctime(&statbuf.st_mtime),
+            pdirent->d_name);
+    }
+    closedir(dirp);
+}
+```
+输出：
+
+![](images/2023-09-17-11-32-00.png)
+
+
+### 实现tree命令
+
+对文件的树结构DFS——递归实现
+![](images/2023-09-17-11-43-17.png)
+
+```C
+#include <43func.h>
+int DFSprint(char *path, int width);
+int main(int argc, char *argv[]){
+    ARGS_CHECK(argc,2);
+    puts(argv[1]);
+    DFSprint(argv[1],4);
+}
+int DFSprint(char *path, int width){
+    DIR* dirp = opendir(path);
+    ERROR_CHECK(dirp,NULL,"opendir");
+    struct dirent *pdirent;
+    char newPath[1024] = {0};
+    while((pdirent = readdir(dirp)) != NULL){
+        if(strcmp(pdirent->d_name,".") == 0 ||
+            strcmp(pdirent->d_name,"..") == 0){
+                continue;
+            }
+        printf("├");
+        for(int i = 1; i < width; ++i){
+            printf("─");
+        }
+        puts(pdirent->d_name);
+        if(pdirent->d_type == DT_DIR){
+            sprintf(newPath,"%s%s%s",path,"/",pdirent->d_name);
+            //printf("newPath = %s\n", newPath);
+            DFSprint(newPath,width+4);
+        }
+    }
+}
+```
+
+
+## 不带缓冲的文件io
+![](images/2023-09-17-19-57-22.png)
+### **文件描述符**：用它来访问某个具体的文件对象
+
+- 上一节所讨论的文件都是使用FILE类型来管理，根据FILE类型的结构可知它的本质是一个缓冲区。与FILE类型相关的文件操作（比如fopen，fread等等）称为带缓冲的IO，它们是ISO C的组成部分
+- POSIX标准支持另一类**不带缓冲区的IO**。在这里，**文件是使用文件描述符来描述**。文件描述符是一个**非负整数**。从原理上来说，进程地址空间的**内核部分里面会维护一个已经打开的文件的数组**，这个数组用来管理所有已经打开的文件（打开的文件存储在进程地址空间的内核区中，称为文件对象），而**文件描述符就是这个数组的索引**。因此，文件描述符可以实现进程和打开文件之间的交互
+
+### 打开、创建和关闭文件
+```C
+#include <sys/types.h> //头文件
+#include <sys/stat.h>
+#include <fcntl.h>
+int open(const char *pathname, int flags); //文件名 打开方式
+int open(const char *pathname, int flags, mode_t mode);//文件名 打开方式 权限
+int creat(const char *pathname, mode_t mode); //文件名 权限
+//creat现在已经不常用了，它等价于
+open(pathname,O_CREAT|O_TRUNC|O_WRONLY,mode);
+```
+- 使用open函数可以打开或者创建并打开一个文件，使用creat函数可以创建一个文件
+- 执行成功时，open函数返回一个文件描述符，表示已经打开的文件；执行失败是，open函数返回-1，并设置相应的errno
+- flags和mode都是一组掩码的合成值，**flags表示打开或创建的方式**，**mode表示文件的访问权限**。
+- flags可选项：
+
+![](images/2023-09-17-20-08-05.png)
+- 使用完文件以后，要记得使用close来关闭文件。
+    - 一旦调用close，则该进程对文件所加的锁全都被释放，并且使文件的打开引用计数减1，只有文件的打开引用计数变为0以后，文件才会被真正的关闭。用ulimit -a命令可以查看单个进程能同时打开的文件的上限
+```C
+int close(int fd);//fd表示文件描述词,是先前由open或creat创建文件时的返回值。
+```
+
+> 为什么int可以作为文件描述符？
+> ![](images/2023-09-17-19-57-52.png)
+
+#### open的例子
+
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    // ./open file1
+    ARGS_CHECK(argc,2);
+    //int fd = open(argv[1], O_WRONLY);
+    //int fd = open(argv[1], O_WRONLY|O_CREAT,0666);
+    //创建文件的行为，总是会受到umask的影响
+    int fd = open(argv[1], O_WRONLY|O_CREAT|O_EXCL,0666);
+    ERROR_CHECK(fd, -1, "open");
+    printf("fd = %d\n", fd);
+    close(fd);
+}
+```
+#### fopen底层调用的open
+
+![](images/2023-09-17-20-17-17.png)
+
+
+### 读写文件
+
+使用read和write来读写文件，它们统称为不带缓冲的IO
+
+```C
+#include <unistd.h>
+ssize_t read(int fd, void *buf, size_t count);//文件描述符 缓冲区 长度
+ssize_t write(int fd, const void *buf, size_t count);
+
+//复习：void *做参数，可以穿任意类型； 做返回值时必须强制类型转换
+```
+![](images/2023-09-17-20-59-50.png)
+
+- 对于read和write函数，出错返回-1，读取完了之后，返回0， 其他情况返回读写的个数。
+
+
+```C
+//读取文件内容
+    // ./open file1
+    ARGS_CHECK(argc,2);
+    int fd = open(argv[1], O_RDWR);
+    ERROR_CHECK(fd, -1, "open");
+    printf("fd = %d\n", fd);
+    //读文本文件
+    char buf[10] = {0};
+    ssize_t ret = read(fd,buf,sizeof(buf));
+    puts(buf);
+    //读二进制文件，怎么写怎么读
+    int i;
+    read(fd,&i,sizeof(i));
+    printf("i = %d\n", i);
+    close(fd);
+
+
+//写文件
+#include <43func.h>
+int main(int argc, char *argv[]){
+    // ./open file1
+    ARGS_CHECK(argc,2);
+    int fd = open(argv[1], O_RDWR);
+    ERROR_CHECK(fd, -1, "open");
+    printf("fd = %d\n", fd);
+    //char buf[10] = "hello";//这里如果是字符串，就是文本文件
+    //write(fd,buf,strlen(buf));
+    int i = 10000000;
+    write(fd,&i,sizeof(i));
+    close(fd);
+}
+
+//如果希望查看文件的2进制信息，在vim中输入命令:%!xxd
+//使用od -h 命令也可查看文件的16进制形式
+
+```
+
+### cp命令实现
+
+![](images/2023-09-17-21-25-05.png)
+
+**关键：write(fdw,buf,ret); // 第三个参数是ret，表示读多少写多少**
+
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    //./cp src dst
+    ARGS_CHECK(argc,3);
+    int fdr = open(argv[1],O_RDONLY);
+    ERROR_CHECK(fdr,-1,"open fdr");
+    int fdw = open(argv[2],O_WRONLY|O_CREAT|O_TRUNC,0666);
+    ERROR_CHECK(fdw,-1,"open fdw");
+    char buf[4096] = {0};
+    while(1){
+        memset(buf,0,sizeof(buf));
+        ssize_t ret = read(fdr,buf,sizeof(buf));
+        if(ret == 0){
+            break;
+        }
+        write(fdw,buf,ret);//第三个参数是ret，表示读多少写多少
+    }
+    close(fdr);
+    close(fdw);
+}
+```
+
+
+### 性能问题
+
+![](images/2023-09-17-22-32-25.png)
+
+
+### 改变文件大小
+
+- 使用ftruncate函数可以改变文件大小或创建固定大小文件
+- 改变文件大小时：
+  - 大——>小：截断
+  - 小——>大：补0
+- 函数ftruncate会将参数fd指定的文件大小改为参数length指定的大小。参数fd为已打开的文件描述词，而且必须是以写入模式打开的文件。如果原来的文件大小比参数length大，则超过的部分会被删去（实际上修改了文件的inode信息）。执行成功则返回0，失败返回-1
+
+```C
+#include <unistd.h>
+int ftruncate(int fd, off_t length);
+```
+
+实例：
+```C
+#include <43func.h>
+int main(int argc,char *argv[]){
+    ARGS_CHECK(argc,2);
+    int fd = open(argv[1], O_RDWR);
+    ERROR_CHECK(fd,-1,"open");
+    int ret = ftruncate(fd,40960);
+    ERROR_CHECK(ret,-1,"ftruncate");
+}
+```

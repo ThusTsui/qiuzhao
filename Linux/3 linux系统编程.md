@@ -579,3 +579,244 @@ int main(int argc,char *argv[]){
     ERROR_CHECK(ret,-1,"ftruncate");
 }
 ```
+
+
+###  内存映射mmap
+
+CPU ———— 内存 ———— 外部设备（磁盘）
+
+cpu直接读写内存数据，外设也可以直接和内存打交道（文件缓冲区）
+cpu如果跟外设打交道，必须经过内存，浪费
+解决：
+DMA:直接内存访问——操作内存=操作外设
+
+mmap：
+1. 在**用户态**找一片**内存空间**，该内存**跟磁盘**建立**映射**
+2. 使用*或[]可以读写内存——等价于——读写文件(不需要read/write)
+
+限制：
+1. 文件大小固定-ftruncate
+2. 只能是磁盘文件
+3. 建立映射之前先open
+
+
+### mmap函数
+
+man帮助手册
+```C
+#include <sys/mman.h>
+void *mmap(void *adr, size_t len, int prot, int flag, int fd, off_t offset);
+int munmap(void *addr,size_t length);//释放
+```
+- addr参数用于指定映射存储区的起始地址。这里设置为NULL，这样就由系统自动分配（通常是在**堆空间**里面寻找）。分配区域的首地址作为返回值(类似malloc)
+- len 表示大小固定
+- prot：表示权限。PROT_READ|PROT_WRITE 表示可读可写
+- flag参数表示属性： 在目前是采用MAP_SHARED(多个进程共享映射区)
+- fd 映射的文件()
+- offset写0
+
+使用与实现：
+![](images/2023-09-18-19-32-47.png)
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    ARGS_CHECK(argc,2);
+    int fd = open(argv[1],O_RDWR);
+    ERROR_CHECK(fd,-1,"open");
+    int ret = ftruncate(fd,5);
+    ERROR_CHECK(ret,-1,"ftruncate");
+    char *p = (char *)mmap(NULL,5,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
+    ERROR_CHECK(p,MAP_FAILED,"mmap");
+    for(int i = 0;i <5; ++i){
+        printf("%c", p[i]);//读
+    }
+    printf("\n");
+    p[0] = 'H';
+    munmap(p,5);
+}
+```
+
+### lseek
+相较于fseek，lseek移动内核态，fseek移动用户态的
+- 函数lseek将文件指针设定到相对于whence，偏移值为offset的位置。它的返回值是读写点距离文件开始的距离
+
+```C
+#include <sys/types.h>
+#include <unistd.h>
+off_t lseek(int fd, off_t offset, int whence);//fd文件描述词
+//whence 可以是下面三个常量的一个
+
+//SEEK_SET 从文件头开始计算
+//SEEK_CUR 从当前指针开始计算
+//SEEK_END 从文件尾开始计算
+
+```
+
+调用：
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    ARGS_CHECK(argc,2);
+    int fd = open(argv[1], O_RDWR);
+    ERROR_CHECK(fd,-1,"open");
+    lseek(fd,40960,SEEK_SET);
+    write(fd,"1",1);
+    close(fd);
+}
+```
+> 可以诱发文件空洞
+
+
+### 文件流底层是使用了文件对象
+
+![](images/2023-09-18-20-18-34.png)
+
+写法的改进及原因↑
+
+
+### printf对应的fd是1
+
+重定向实现：1号文件描述符不在屏幕而在文件
+
+![](images/2023-09-18-21-18-02.png)
+
+1、代码使用了下面的dup函数
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    printf("\n");
+    ARGS_CHECK(argc,2);
+    int oldfd = open(argv[1],O_RDWR);
+    ERROR_CHECK(oldfd,-1,"open");
+    close(STDOUT_FILENO);
+    int newfd = dup(oldfd);
+    printf("oldfd = %d\n", oldfd);
+    printf("newfd = %d\n", newfd);
+}
+```
+
+### 文件描述符的复制
+
+1. 数值上不同
+2. 偏移量共享
+
+```C
+#include <unistd.h>
+int dup(int oldfd);
+int dup2(int oldfd, int newfd);
+```
+- dup返回一个新的文件描述符（是自动分配的，数值是没有使用的文件描述符的最小编号）。这个新的描述符是旧文件描述符的拷贝。这意味着两个描述符共享同一个数据结构
+
+```C
+#include <43func.h>
+int main(int argc, char *argv[]){
+    ARGS_CHECK(argc,2);
+    int oldfd = open(argv[1],O_RDWR);
+    ERROR_CHECK(oldfd,-1,"open");
+    printf("oldfd = %d\n", oldfd);
+    int newfd = dup(oldfd);
+    printf("newfd = %d\n", newfd);
+    write(oldfd,"hello",5);
+    close(oldfd);//再最后一行与在现在效果一样，原因是用了引用计数
+    write(newfd,"world",5);
+}
+```
+- **引用计数**：保证了都关掉才释放
+
+![](images/2023-09-18-21-26-09.png)
+
+
+- dup2目标描述符将变成旧描述符的复制品，此时两个文件描述符现在都指向同一个文件对象，并且是oldfd指向的文件
+- （执行完成以后，如果newfd已经打开了文件，该文件将会被关闭）
+
+
+- 实现
+
+
+![](images/2023-09-18-21-33-11.png)
+
+
+
+
+
+
+## 即时聊天
+
+### 有名管道 /FIFO
+
+![](images/2023-09-18-22-31-19.png)
+
+```C
+$ mkfifo [管道名字]
+使用cat打开管道可以打开管道的读端
+$ cat [管道名字]
+打开另一个终端，向管道当中输入内容可以实现写入内容
+$ echo “string” > [管道名字]
+此时读端也会显示内容
+//要一端读一端写，才能继续，否则会阻塞
+```
+> 禁止使用vim来打开管道文件
+### 用系统调用操作管道
+
+open O_WRONLY 写端 、O_RDONLY 读端
+
+![](images/2023-09-18-22-37-56.png)
+> 管道在open的时候阻塞的
+
+
+### 死锁的产生与解决
+- 产生
+
+![](images/2023-09-18-23-20-39.png)
+
+- 解决：调整顺序
+
+![](images/2023-09-18-23-21-17.png)
+
+
+### 全双工的实现
+
+管道是半双工，为了实现即时聊天，用两个管道组成全双工。
+![](images/2023-09-18-23-22-13.png)
+
+- 问题：只能一条输入一条输出如此往复
+
+
+- 解决：引入io多路复用(小助手)
+
+![](images/2023-09-18-23-23-13.png)
+
+### io多路复用的实现
+
+#### select
+
+```C
+int select(int maxfd, //最大的文件描述符（其值应该为最大的文件描述符字 + 1）
+            fd_set *readset,//内核 读 操作的描述符字集合
+            fd_set *writeset, //内核 写 操作的描述符字集合
+            fd_set *exceptionset, //内核 异常 操作的描述符字集合
+            struct timeval * timeout);//等待描述符就绪需要多少时间。
+            //NULL代表永远等下去，一个固定值代表等待固定时间，0代表根本不等待
+
+//参数的类型fd_set 就是io多路复用实现提到的"小助手"
+// 返回值是就绪描述字的正数目，0——超时，-1——出错
+
+
+//readset、writeset、exceptionset都是fd_set集合
+//集合的相关操作如下：
+void FD_ZERO(fd_set *fdset); /* 将所有fd清零 */
+void FD_SET(int fd, fd_set *fdset); /* 增加一个fd */
+void FD_CLR(int fd, fd_set *fdset); /* 删除一个fd */
+int FD_ISSET(int fd, fd_set *fdset); /* 判断一个fd是否有设置 */
+```
+
+
+- 实现步骤：
+
+1. 创建fd_set
+2. 设置合适的监听
+   1. FD_ZERO 清空
+   2. FD_SET 加入监听
+3. 调用select函数，会让进程阻塞
+4. 当监听的fd中，有任何一个就绪，则select就绪
+5. 轮流询问所有监听的fd，是否就绪：用 FD_ISSET
